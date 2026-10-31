@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Olympiad Quest</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#ffe3c2;font-family:"Trebuchet MS",system-ui,sans-serif;color:#4a3555}
+canvas#c{display:block;width:100%;height:100%}
+#hud{position:fixed;left:12px;top:max(12px,env(safe-area-inset-top));background:#fffc;padding:8px 14px;border-radius:14px;font-weight:700;line-height:1.5}
+#mm{position:fixed;right:12px;top:max(12px,env(safe-area-inset-top));width:160px;height:160px;border:4px solid #fff;border-radius:14px;box-shadow:0 4px 14px #0004;background:#fff8}
+#mu{position:fixed;left:12px;bottom:12px;border:0;border-radius:12px;padding:8px 12px;background:#fffc;font-size:18px;cursor:pointer}
+#pz{position:fixed;left:64px;bottom:12px;border:0;border-radius:12px;padding:8px 12px;background:#fffc;font:700 16px "Trebuchet MS",system-ui,sans-serif;color:#4a3555;cursor:pointer}
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#3b2a5aaa;z-index:5}
+.h{display:none}
+.card{background:#fff8ee;border-radius:22px;padding:22px 26px;max-width:580px;width:calc(100% - 40px);box-shadow:0 10px 40px #0006;max-height:90vh;overflow:auto;line-height:1.5}
+h1,h2{margin:.2em 0}.tag{display:inline-block;background:#ffb4c8;border-radius:20px;padding:2px 12px;font-size:13px;font-weight:700}
+.o,.go{display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:14px;background:#cfe8ff;font-size:18px;font-weight:700;color:#4a3555;cursor:pointer;transition:transform .15s}
+.o:hover,.go:hover{transform:scale(1.03)}.go{background:#ffc94d}.o.ok{background:#9be8a6}.o.no{background:#ff9aa8;animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+#hint{color:#a0476b;font-weight:700;min-height:1.4em}
+</style></head><body>
+<canvas id="c"></canvas><canvas id="mm" width="160" height="160"></canvas>
+<div id="hud"></div><button id="mu">🎵</button><button id="pz">⏸ Menu</button>
+<div id="ov" class="ov"><div class="card" id="cd"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+const $=i=>document.getElementById(i),rnd=a=>a[Math.random()*a.length|0],shuf=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(p=>p[1]);
+const LV=[
+{n:"Pigeon Meadow",th:"<b>Pigeonhole Principle:</b> n+1 pigeons in n holes ⇒ some hole holds 2. Generalised: kn+1 objects in n boxes ⇒ some box holds k+1. The olympiad trick is choosing the pigeons and holes cleverly: pair numbers that sum to 21, or cut a square into four smaller squares.",p:[
+["You draw socks from a drawer with 5 colours. How many must you draw to be sure of a matching pair?",["5","6","7","10"],1,"Worst case: one of each colour (5). The next must match.","Combinatorics"],
+["How many people guarantee that at least 3 share a birth month?",["25","24","36","13"],0,"Worst case: 2 per month = 24 people. One more forces a third.","Combinatorics"],
+["Choose numbers from 1…20. How many must you pick to guarantee two that sum to 21?",["10","11","12","15"],1,"Holes: pairs (1,20),(2,19)…(10,11) — 10 holes.","Combinatorics"],
+["Points lie in a 2×2 square. Least n forcing two points within distance √2?",["4","5","8","9"],1,"Cut into four 1×1 squares (diagonal √2).","Combinatorics"]]},
+{n:"Modulo Mountain",th:"<b>Modular arithmetic:</b> a ≡ b (mod m) means m divides a−b. Remainders add and multiply nicely. Powers cycle: 2³≡1 (mod 7), so 2¹⁰⁰=(2³)³³·2. Squares are only 0 or 1 mod 4. A number is congruent to its digit sum mod 9.",p:[
+["What is the remainder of 2¹⁰⁰ divided by 7?",["1","2","4","6"],1,"2³=8≡1, so 2¹⁰⁰=(2³)³³·2≡2.","Number Theory"],
+["What is the last digit of 7²⁰²⁶?",["1","3","7","9"],3,"Last digits cycle 7,9,3,1. 2026≡2 (mod 4) → 9.","Number Theory"],
+["What is the remainder when 1+2+…+100 is divided by 9?",["0","1","5","7"],1,"Sum=5050; digit sum 10 → remainder 1.","Number Theory"],
+["Which remainders can a perfect square leave when divided by 4?",["0 and 1 only","0, 1 and 2","1 and 3 only","all of 0–3"],0,"(2k)²=4k², (2k+1)²=4k²+4k+1.","Number Theory"]]},
+{n:"McNugget Village",th:"<b>Chicken McNugget (Frobenius) problem:</b> for coprime pack sizes a and b, the largest unbuyable amount is ab−a−b and everything above is buyable. With three sizes (6, 9, 20) no simple formula exists — find a run of 6 consecutive buyable numbers and everything after works.",p:[
+["Packs of 4 and 7 only. Largest number of nuggets you cannot buy?",["15","17","18","24"],1,"ab−a−b = 28−11 = 17.","Number Theory"],
+["Packs of 3 and 5 only. Largest number you cannot buy?",["4","7","8","11"],1,"15−3−5 = 7.","Number Theory"],
+["Packs of 5 and 8 only. Largest number you cannot buy?",["27","31","32","35"],0,"40−5−8 = 27.","Number Theory"],
+["Packs of 6, 9 and 20. Largest number you cannot buy?",["37","41","43","47"],2,"44–49 are all buyable (six in a row). 43 is not: it isn’t a multiple of 3, so needs 20s, and 43−20=23, 43−40=3 fail.","Number Theory"]]},
+{n:"Circle Cove",th:"<b>Circle angle theorems:</b> inscribed angle = ½ the central angle on the same arc; angles on one arc are equal; opposite angles of a cyclic quadrilateral sum to 180°; the angle in a semicircle is 90°; tangent–chord angle = inscribed angle on that chord. <i>Angle chasing</i>: label what you know, apply these, repeat.",p:[
+["An arc has central angle 80°. What is the inscribed angle on the same arc?",["20°","40°","80°","160°"],1,"Inscribed = half of central.","Geometry"],
+["ABCD is cyclic and ∠A = 110°. Find ∠C.",["70°","80°","110°","250°"],0,"Opposite angles sum to 180°.","Geometry"],
+["AB is a diameter, C on the circle, ∠A = 35°. Find ∠B.",["35°","45°","55°","65°"],2,"∠C = 90° (semicircle), so ∠B = 180−90−35.","Geometry"],
+["A tangent at A and chord AB cut off an arc of 100°. What is the tangent–chord angle?",["25°","50°","100°","200°"],1,"It equals the inscribed angle: half of 100°.","Geometry"]]},
+{n:"Triangle Tundra",th:"<b>Congruence & lengths:</b> SSS, SAS, ASA/AAS and RHS prove triangles identical; corresponding parts are then equal (CPCTC). Isosceles ⇒ equal base angles. A radius ⊥ chord bisects it, creating right triangles for Pythagoras. A tangent is ⊥ to the radius at the touch point.",p:[
+["In triangle ABC, AB=AC and ∠A=40°. Find a base angle.",["40°","60°","70°","80°"],2,"(180−40)/2.","Geometry"],
+["A circle has radius 13 and a chord of length 24. How far is the chord from the centre?",["5","6","7","12"],0,"Half-chord 12: 12²+d²=13².","Geometry"],
+["A point is 17 from the centre of a circle of radius 8. Tangent length?",["9","15","17","25"],1,"Right angle at touch point: 17²−8²=15².","Geometry"],
+["Find the area of a triangle with sides 13, 14, 15.",["74","84","91","105"],1,"Altitude to the side 14 splits it into 5 and 9, height 12: ½·14·12.","Geometry"]]},
+{n:"Algebra Alps",th:"<b>Algebraic identities:</b> a²+b²=(a+b)²−2ab; a²−b²=(a−b)(a+b); x²+1/x²=(x+1/x)²−2. <b>Sophie Germain:</b> n⁴+4=(n²+2n+2)(n²−2n+2), so n⁴+4 is composite for n>1. Spotting factorisations is the heart of olympiad algebra.",p:[
+["If a+b=5 and ab=6, find a²+b².",["11","13","19","25"],1,"25−2·6.","Algebra"],
+["If x+1/x=3, find x²+1/x².",["5","7","9","11"],1,"9−2.","Algebra"],
+["Compute 2026² − 2025².",["1","2026","4051","4052"],2,"(2026−2025)(2026+2025).","Algebra"],
+["Smallest prime factor of 5⁴+4 = 629?",["3","7","13","17"],3,"Sophie Germain: (25+10+2)(25−10+2)=37·17.","Algebra"]]}];
+const NAMES=["Pigeon Blob","Mod Goblin","Nugget Ogre","Angle Imp"],COLS=[0xff8fab,0x9d8cff,0xffb347,0x5ed6c0];
+// renderer
+const R=new THREE.WebGLRenderer({canvas:$("c"),antialias:true});R.shadowMap.enabled=true;R.setPixelRatio(Math.min(devicePixelRatio,2));
+const S=new THREE.Scene();S.background=new THREE.Color(0xffe3c2);S.fog=new THREE.Fog(0xffe3c2,14,38);
+const C=new THREE.PerspectiveCamera(50,1,.1,100);
+S.add(new THREE.HemisphereLight(0xfff4e0,0xb48ad8,.95));
+const sun=new THREE.DirectionalLight(0xffd9a0,.8);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-16,right:16,top:16,bottom:-16,far:50});S.add(sun,sun.target);
+function rs(){R.setSize(innerWidth,innerHeight,false);C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix()}rs();addEventListener("resize",rs);
+// physics
+const W=new CANNON.World();W.gravity.set(0,0,0);const mat=new CANNON.Material();W.addContactMaterial(new CANNON.ContactMaterial(mat,mat,{friction:0,restitution:.05}));
+const pb=new CANNON.Body({mass:1,shape:new CANNON.Sphere(.5),material:mat,fixedRotation:true});W.addBody(pb);
+const pl=new THREE.Group(),pm=new THREE.MeshStandardMaterial({color:0x6ec1ff,roughness:.4});
+const pbody=new THREE.Mesh(new THREE.SphereGeometry(.5,24,18),pm);pbody.castShadow=true;pl.add(pbody);
+const cap=new THREE.Mesh(new THREE.ConeGeometry(.3,.5,12),new THREE.MeshStandardMaterial({color:0xff5d73}));cap.position.y=.62;pl.add(cap);
+[-.17,.17].forEach(x=>{const e=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),new THREE.MeshBasicMaterial({color:0x222222}));e.position.set(x,.1,-.44);pl.add(e)});S.add(pl);
+const cv=document.createElement("canvas");cv.width=cv.height=64;const cx=cv.getContext("2d");cx.fillStyle="#fff3d6";cx.fillRect(0,0,64,64);cx.fillStyle="#ffe0b0";cx.fillRect(0,0,32,32);cx.fillRect(32,32,32,32);
+const ft=new THREE.CanvasTexture(cv);ft.wrapS=ft.wrapT=THREE.RepeatWrapping;
+const WM=[0xff9fb8,0xffc98a,0xa8e6a1,0x9fd4ff,0xc9b3ff,0xfff1a0].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.7}));
+let grp,bods=[],mons=[],maze,N,lv=0,hp=3,mode="nav",cur=null,ex,exm,mmc,parts=[],keys={},vx=0,vz=0,left=0;
+const K=2,mm=$("mm").getContext("2d");
+function build(l){try{localStorage.setItem(SV,l)}catch(e){}
+ if(grp){S.remove(grp);bods.forEach(b=>W.removeBody(b))}grp=new THREE.Group();S.add(grp);bods=[];mons=[];hp=3;mode="nav";setMode("nav");
+ const n=4+l;N=2*n+1;maze=Array.from({length:N},()=>Array(N).fill(1));maze[1][1]=0;const st=[[1,1]];
+ while(st.length){const[x,y]=st[st.length-1];const d=[[2,0],[-2,0],[0,2],[0,-2]].filter(([a,b])=>x+a>0&&x+a<N-1&&y+b>0&&y+b<N-1&&maze[y+b][x+a]);
+  if(!d.length){st.pop();continue}const[a,b]=rnd(d);maze[y+b/2][x+a/2]=0;maze[y+b][x+a]=0;st.push([x+a,y+b])}
+ for(let i=0;i<n*2;i++){const x=1+(Math.random()*(N-2)|0),y=1+(Math.random()*(N-2)|0);if(x%2!=y%2)maze[y][x]=0}
+ const wg=new THREE.BoxGeometry(K,2.2,K);
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(maze[y][x]){const m=new THREE.Mesh(wg,WM[(x*3+y*5+(x*y))%6]);m.position.set(x*K,1.1,y*K);m.castShadow=m.receiveShadow=true;grp.add(m);
+  const b=new CANNON.Body({mass:0,shape:new CANNON.Box(new CANNON.Vec3(K/2,1.1,K/2)),material:mat});b.position.set(x*K,1.1,y*K);W.addBody(b);bods.push(b)}
+ ft.repeat.set(N,N);const f=new THREE.Mesh(new THREE.PlaneGeometry(N*K,N*K),new THREE.MeshStandardMaterial({map:ft}));f.rotation.x=-Math.PI/2;f.position.set((N-1)*K/2,0,(N-1)*K/2);f.receiveShadow=true;grp.add(f);
+ // monsters
+ const cells=[];for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++)if(!maze[y][x]&&x+y>7&&x+y<2*N-6)cells.push([x,y]);
+ const cnt=l<2?3:4,ch=[];for(const c of shuf(cells)){if(ch.length<cnt&&ch.every(o=>Math.abs(o[0]-c[0])+Math.abs(o[1]-c[1])>4))ch.push(c)}
+ const probs=shuf(LV[l%LV.length].p);
+ ch.forEach((c,i)=>{const g=mk(COLS[i%4]);g.position.set(c[0]*K,.8,c[1]*K);grp.add(g);mons.push({g,c,x:c[0]*K,z:c[1]*K,p:probs[i],name:NAMES[i%4],alive:1,dy:0,ph:i,sk:0})});left=mons.length;
+ ex=new THREE.Group();exm=new THREE.MeshStandardMaterial({color:0x999999,emissive:0x000000});const tr=new THREE.Mesh(new THREE.TorusGeometry(.8,.15,12,32),exm);tr.position.y=1;ex.add(tr);
+ const di=new THREE.Mesh(new THREE.CircleGeometry(.7,24),new THREE.MeshBasicMaterial({color:0xfff3b0,transparent:true,opacity:.6}));di.position.y=1;ex.add(di);ex.position.set((N-2)*K,0,(N-2)*K);grp.add(ex);
+ pb.position.set(K,.5,K);pb.velocity.set(0,0,0);vx=vz=0;
+ mmc=document.createElement("canvas");mmc.width=mmc.height=160;const q=mmc.getContext("2d"),s=160/N;q.fillStyle="#fff6e6";q.fillRect(0,0,160,160);q.fillStyle="#9b7fc9";
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(maze[y][x])q.fillRect(x*s,y*s,s+.5,s+.5);hud()}
+function mk(col){const g=new THREE.Group(),m=new THREE.MeshStandardMaterial({color:col,roughness:.5}),b=new THREE.Mesh(new THREE.SphereGeometry(.7,24,18),m);b.scale.y=1.1;b.castShadow=true;g.add(b);
+ const w=new THREE.MeshBasicMaterial({color:0xffffff}),k=new THREE.MeshBasicMaterial({color:0x222222});
+ [-1,1].forEach(s=>{const e=new THREE.Mesh(new THREE.SphereGeometry(.18,12,10),w);e.position.set(s*.25,.2,.55);const p=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),k);p.position.set(s*.25,.2,.7);
+  const h=new THREE.Mesh(new THREE.ConeGeometry(.12,.35,8),new THREE.MeshStandardMaterial({color:0xfff3b0}));h.position.set(s*.4,.85,0);h.rotation.z=-s*.3;g.add(e,p,h)});
+ const mo=new THREE.Mesh(new THREE.TorusGeometry(.18,.04,8,12,Math.PI),k);mo.position.set(0,-.1,.66);mo.rotation.z=Math.PI;g.add(mo);return g}
+function hud(){$("hud").innerHTML=`Level ${lv+1}: ${LV[lv%LV.length].n}<br>${"❤️".repeat(hp)||"💔"} &nbsp; 👾 ${left} left${left?"":" — portal open! 🌀"}`}
+// battle
+function fight(m){cur=m;mode="fight";setMode("fight");cn(m)}
+function cn(m){const p=m.p,o=$("ov");o.className="ov";
+ $("cd").innerHTML=`<span class="tag">${m.name} · ${p[4]}</span><h2>${p[0]}</h2><div id="hint"></div><div id="ops"></div>`;
+ shuf(p[1].map((t,i)=>[t,i])).forEach(([t,i])=>{const b=document.createElement("button");b.className="o";b.textContent=t;b.onclick=()=>ans(b,i);$("ops").appendChild(b)})}
+function ans(b,i){const p=cur.p;if(i==p[2]){b.classList.add("ok");sfx(1);[...document.querySelectorAll(".o")].forEach(x=>x.onclick=null);
+  setTimeout(()=>{$("ov").className="ov h";cur.alive=0;cur.dy=1;left--;boom(cur.g.position);mode="nav";setMode("nav");hud();cur=null},800)}
+ else{b.classList.add("no");b.onclick=null;sfx(0);hp--;cur.sk=1;hud();$("hint").textContent="💡 Hint: "+p[3];
+  if(!hp){setTimeout(()=>{$("cd").innerHTML="<h2>💔 Out of hearts!</h2><p>Don’t worry — mistakes are how olympiad solvers learn. Re-read the hints and try again.</p><button class='go' id='rt'>Retry level</button>";$("rt").onclick=()=>{$("ov").className="ov h";build(lv)}},900)}}}
+function boom(p){for(let i=0;i<24;i++){const m=new THREE.Mesh(new THREE.IcosahedronGeometry(.1,0),new THREE.MeshBasicMaterial({color:rnd([0xffd166,0xff8fab,0x9be8a6,0x9fd4ff])}));m.position.copy(p);
+ parts.push({m,v:new THREE.Vector3((Math.random()-.5)*5,Math.random()*5+1,(Math.random()-.5)*5),t:1});S.add(m)}}
+function win(){mode="win";try{lv<LV.length-1?localStorage.setItem(SV,lv+1):localStorage.removeItem(SV)}catch(e){}setMode("calm");const l=LV[lv%LV.length],last=lv==LV.length-1;sfx(1);$("ov").className="ov";
+ $("cd").innerHTML=`<h2>🎉 Level ${lv+1} cleared!</h2><p>${l.th}</p><button class="go" id="nx">${last?"🏆 Finish — back to home":"Next level ➜"}</button>`;
+ $("nx").onclick=()=>{if(last){lv=0;home()}else{$("ov").className="ov h";lv++;build(lv)}}}
+const SV="oqProgress";
+function hs(){try{return localStorage.getItem(SV)!==null}catch(e){return false}}
+function ld(){try{return Math.min(Math.max(+localStorage.getItem(SV)||0,0),LV.length-1)}catch(e){return 0}}
+function home(){mode="home";setMode("nav");const h=hs(),s=ld();$("ov").className="ov";
+ $("cd").innerHTML=`<h1>🌈 Olympiad Quest</h1><p>Explore cozy mazes, meet monsters, and defeat them with <b>real olympiad maths</b>. Defeat all monsters to unlock the portal and escape!</p><p>Move: <b>WASD / arrow keys</b>. Walk into a monster to duel it. 3 hearts per level. Press <b>Esc</b> or ⏸ Menu to pause.</p>`+(h?`<button class="go" id="rs">▶ Resume Level ${s+1}: ${LV[s].n}</button><button class="o" id="ns">🔄 Start again from Level 1</button>`:`<button class="go" id="ns">Start adventure</button>`);
+ if(h)$("rs").onclick=()=>{aud();$("ov").className="ov h";lv=s;build(lv)};
+ $("ns").onclick=()=>{aud();$("ov").className="ov h";lv=0;build(0)}}
+function pause(){if(mode!="nav")return;mode="pause";$("ov").className="ov";
+ $("cd").innerHTML=`<h2>⏸ Paused</h2><p>Level ${lv+1}: ${LV[lv].n}</p><button class="go" id="r1">▶ Resume</button><button class="o" id="r2">🔄 Restart this level</button><button class="o" id="r3">🏠 Leave to home</button>`;
+ $("r1").onclick=()=>{$("ov").className="ov h";mode="nav"};$("r2").onclick=()=>{$("ov").className="ov h";build(lv)};$("r3").onclick=home}
+$("pz").onclick=pause;addEventListener("keydown",e=>{if(e.key=="Escape"){mode=="pause"?$("r1").click():pause()}});
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=1;if(e.key.startsWith("Arrow"))e.preventDefault()});addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
+// audio
+let ac,mg,am="nav",stp=0,muted=0;const SC=[0,2,4,7,9,7,4,2],FS=[0,3,5,6,7,10,7,5];
+function setMode(m){am=m=="fight"?"fight":"nav"}
+function nt(f,d,ty,v,dl){if(!ac||muted)return;const t=ac.currentTime+(dl||0),o=ac.createOscillator(),g=ac.createGain();o.type=ty;o.frequency.value=f;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(mg);o.start(t);o.stop(t+d)}
+function aud(){if(ac)return;ac=new(window.AudioContext||window.webkitAudioContext)();mg=ac.createGain();mg.gain.value=.3;mg.connect(ac.destination);tk()}
+function tk(){const f=am=="fight",s=(f?FS:SC)[stp%8],b=f?220:261.6,fr=b*2**(s/12);stp++;
+ if(f){nt(fr,.12,"sawtooth",.05);if(stp%2)nt(b/4,.2,"square",.09);if(stp%4==0)nt(fr*2,.08,"square",.03)}
+ else{nt(fr,.9,"triangle",.1);if(stp%8==1)[0,4,7].forEach(i=>nt(b/2*2**(i/12),2.2,"sine",.05))}
+ setTimeout(tk,f?150:400)}
+function sfx(ok){ok?[523,659,784,1047].forEach((f,i)=>nt(f,.25,"triangle",.12,i*.08)):nt(110,.35,"sawtooth",.12)}
+$("mu").onclick=()=>{muted=!muted;$("mu").textContent=muted?"🔇":"🎵"};
+// loop
+const ck=new THREE.Clock();
+function loop(){requestAnimationFrame(loop);const dt=Math.min(ck.getDelta(),.05),t=ck.elapsedTime;
+ if(grp){let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),dz=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+  const L=Math.hypot(dx,dz)||1;if(mode!="nav")dx=dz=0;const k=1-Math.pow(.0005,dt);vx+=(dx/L*5-vx)*k;vz+=(dz/L*5-vz)*k;pb.velocity.set(vx,0,vz);W.step(1/60,dt,3);pb.position.y=.5;
+  const mv=Math.hypot(vx,vz);pl.position.set(pb.position.x,.5+Math.abs(Math.sin(t*10))*.12*(mv>.5?1:0),pb.position.z);if(mv>.5)pl.rotation.y=Math.atan2(vx,vz)+Math.PI;pbody.scale.set(1,1-Math.sin(t*10)*.04*(mv>.5),1);
+  C.position.lerp(new THREE.Vector3(pb.position.x,11,pb.position.z+8),.06);C.lookAt(pb.position.x,0,pb.position.z+.5);sun.position.set(pb.position.x+8,14,pb.position.z+6);sun.target.position.copy(pb.position);
+  mons.forEach(m=>{const g=m.g;if(m.alive){g.position.y=.8+Math.sin(t*2+m.ph)*.15;g.scale.setScalar(1+Math.sin(t*3+m.ph)*.05);g.rotation.y=Math.atan2(pb.position.x-m.x,pb.position.z-m.z);
+    if(m.sk>0){m.sk-=dt*2;g.position.x=m.x+Math.sin(t*60)*.15*m.sk}else g.position.x=m.x;
+    if(mode=="nav"&&Math.hypot(pb.position.x-m.x,pb.position.z-m.z)<2.1)fight(m)}
+   else if(m.dy){g.scale.multiplyScalar(1-dt*4);g.rotation.y+=dt*12;g.position.y+=dt*2;if(g.scale.x<.05){g.visible=false;m.dy=0}}});
+  ex.rotation.y=t;ex.position.y=Math.sin(t*2)*.1;if(!left){exm.color.set(0x66e0a0);exm.emissive.set(0x33aa66)}
+  if(!left&&mode=="nav"&&Math.hypot(pb.position.x-ex.position.x,pb.position.z-ex.position.z)<1.5)win();
+  parts=parts.filter(p=>{p.t-=dt;p.v.y-=9*dt;p.m.position.addScaledVector(p.v,dt);p.m.scale.setScalar(Math.max(p.t,.01));if(p.t<=0){S.remove(p.m);return false}return true});
+  mm.clearRect(0,0,160,160);mm.drawImage(mmc,0,0);const s=160/N,u=K;mm.fillStyle=left?"#aaa":"#2ecc71";mm.fillRect((N-2)*s,(N-2)*s,s,s);
+  mons.forEach(m=>{if(m.alive){mm.fillStyle="#e63a5e";mm.beginPath();mm.arc((m.x/u+.5)*s,(m.z/u+.5)*s,s*.4,0,7);mm.fill()}});
+  mm.fillStyle="#ffd000";mm.strokeStyle="#333";mm.lineWidth=1.5;mm.beginPath();mm.arc((pb.position.x/u+.5)*s,(pb.position.z/u+.5)*s,s*.45+1,0,7);mm.fill();mm.stroke()}
+ R.render(S,C)}
+C.position.set(2,11,10);loop();home();
+</script></body></html>
